@@ -1,6 +1,9 @@
 # MS-BASIC-z80
 This adaptation of MS-Basic, is for Z80 computer with tms9918 video system.
-<img width="985" height="467" alt="image" src="https://github.com/user-attachments/assets/2c46e129-ec57-428c-8a5f-14c89525d963" />
+I don’t know if it works, and it would help me to receive your comment, I’m not an expert programmer.
+
+
+<img width="217" height="23" alt="image" src="https://github.com/user-attachments/assets/8be3fc14-ebb4-470a-b969-269d5f373126" />
 
 
 
