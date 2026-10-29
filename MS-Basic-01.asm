@@ -15,7 +15,7 @@
 ; NASCOM ROM BASIC Ver 4.7, (C) 1978 Microsoft
 ; Escaneado de la fuente publicado en 80-BUS NEWS del Vol. 2, Edición 3
 ; (mayo-junio de 1983) a Vol. 3, Edición 3 (mayo-junio de 1984)
-; Adaptado para el freeware Zilog Macro Assembler 2.10 para producir
+; Adaptado para el ZASM 2.10 para producir
 ; el código ROM original (suma de verificación A934H). PA
 
 ; GENERAL EQUATES
