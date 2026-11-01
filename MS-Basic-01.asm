@@ -479,8 +479,7 @@ ERRORS: .BYTE   "NF"            ; NEXT without FOR
         LD      A, 92H          ; Palabra de control: 10010010B (Port A Out, Port B In)
         OUT     (PPI_CTRL), A
         
-        LD      DE,INITAB       ; Initialise workspace
-        ; ... resto de la inicialización original ...
+        LD      DE,INITAB       ; Initialise workspace        ; ... resto de la inicialización original ...
 
 INITAB: JP      WARMST          ; Warm start jump
         JP      FCERR           ; "USR (X)" jump (Set to Error)
@@ -4493,102 +4492,90 @@ OUTNCR: CALL    OUTC            ; Output character in A
         JP      PRNTCRLF        ; Output CRLF
 
 ; =====================================================================
-; RUTINAS DE CASSETTE PARA CLOAD Y CSAVE
+; RUTINAS DE CASSETTE ADAPTADAS PARA PC7 (LECTURA) Y PC6 (ESCRITURA)
 ; =====================================================================
 
-TAPE_PORT   .EQU    06H     ; Puerto de E/S para el cassette (ejemplo)
-
 CLOAD:
-        ; Opcional: Mostrar mensaje para que el usuario pulse 'Play' en el grabador
+        ; Asegurar que el Puerto C superior está configurado como ENTRADA (PC7)
+        LD      A, 92H          ; Modo 0, C superior = Entrada
+        OUT     (PPI_CTRL), A
+
         LD      HL, MSG_PLAY
         CALL    PRS
-        CALL    GETINP          ; Esperar a que el usuario pulse una tecla
+        CALL    GETINP          ; Esperar confirmación del usuario
         
-        ; Preparar punteros de memoria para recibir el programa
         LD      HL, (BASTXT)    ; Inicio del programa BASIC
         
 CLD_WAIT_SYNC:
-        ; Rutina para buscar el tono de sincronización en la cinta
         CALL    TAPE_IN_BYTE
-        CP      16H             ; Sincronización estándar (ej. byte SYN o 0x16)
+        CP      16H             ; Byte de sincronización
         JP      NZ, CLD_WAIT_SYNC
 
-        ; Leer longitud y bloques de datos
-        CALL    TAPE_IN_BYTE    ; Leer MSB de longitud (o leer hasta fin de bloque)
+        CALL    TAPE_IN_BYTE
         LD      B, A
         CALL    TAPE_IN_BYTE
         LD      C, A            ; BC = tamaño del programa
 
 CLD_DATA_LOOP:
-        CALL    TAPE_IN_BYTE    ; Leer byte desde la cinta
-        LD      (HL), A         ; Guardar en RAM BASIC
+        CALL    TAPE_IN_BYTE
+        LD      (HL), A
         INC     HL
         DEC     BC
         LD      A, B
         OR      C
         JP      NZ, CLD_DATA_LOOP
         
-        ; Actualizar el final del programa en el entorno BASIC
         LD      (PROGND), HL
-        CALL    RUNFST          ; Reinicializar punteros de ejecución
-        JP      PRNTOK          ; Volver alprompt "Ok"
+        CALL    RUNFST
+        JP      PRNTOK
 
 CSAVE:
-        ; Mostrar mensaje para que el usuario pulse 'Record / Play'
-        LD      HL, MSG_REC
-        CALL    PRS
-        CALL    GETINP          ; Esperar confirmación por teclado
-        
-        ; Enviar tono guía / preámbulo de sincronización
-        LD      B, 50           ; Número de bytes de tono guía
-        LD      A, 16H          ; Byte de sincronización
+    LD      HL, MSG_REC
+    CALL    PRS
+    CALL    GETINP          ; Esperar confirmación
+    
+    LD      B, 50           ; Tono guía
+    LD      A, 16H
 CS_SYNC_LP:
-        CALL    TAPE_OUT_BYTE
-        DJNZ    CS_SYNC_LP
+    CALL    TAPE_OUT_BYTE
+    DJNZ    CS_SYNC_LP
 
-        ; Calcular tamaño del programa (PROGND - BASTXT)
-        LD      HL, (BASTXT)
-        LD      DE, (PROGND)
-        
-        ; Enviar tamaño (MSB y LSB)
-        PUSH    DE
-        EX      DE, HL
-        ; (Opcional: enviar tamaño a la cinta si tu rutina lo requiere)
-        POP     HL              ; HL apunta de nuevo a BASTXT
+    LD      HL, (BASTXT)
+    LD      DE, (PROGND)
 
 CSV_DATA_LOOP:
-        LD      A, (HL)         ; Obtener byte del programa BASIC
-        CALL    TAPE_OUT_BYTE   ; Enviar byte al cassette
-        
-        ; Comprobar si hemos llegado al final del programa (PROGND)
-        PUSH    HL
-        LD      HL, (PROGND)
-        EX      (SP), HL
-        CALL    CPDEHL          ; ¿HL == PROGND?
-        POP     HL
-        JP      Z, CS_DONE      ; Si es igual, terminamos
-        INC     HL
-        JP      CSV_DATA_LOOP
+    LD      A, (HL)
+    CALL    TAPE_OUT_BYTE
+    
+    PUSH    HL
+    LD      HL, (PROGND)
+    EX      (SP), HL
+    CALL    CPDEHL
+    POP     HL
+    JP      Z, CS_DONE
+    INC     HL
+    JP      CSV_DATA_LOOP
 
 CS_DONE:
-        XOR     A
-        LD      A, 00H          ; Byte de fin de transmisión
-        CALL    TAPE_OUT_BYTE
-        JP      PRNTOK          ; Volver al prompt "Ok"
+    XOR     A
+    LD      A, 00H
+    CALL    TAPE_OUT_BYTE
+    JP      PRNTOK
 
 ; =====================================================================
-; BAJO NIVEL: RUTINAS DE BIT-BANGING O ACCESO AL PUERTO DE CINTA
+; BAJO NIVEL: LECTURA EN PC7 Y ESCRITURA EN PC6
 ; =====================================================================
 
 TAPE_IN_BYTE:
-        ; Lee un byte desde el puerto de cassette (implementación por hardware/software)
-        IN      A, (TAPE_PORT)
-        RET
+        ; Lee el estado del Puerto C y extrae el bit 7 (PC7)
+        IN      A, (PPI_PORTC)
+        RLCA                    ; Mueve el bit 7 (PC7) a la bandera Carry (o aislar con AND 80H)
+        RET                     ; Retorna el valor leído en el acumulador o bit
 
 TAPE_OUT_BYTE:
-        ; Envía un byte hacia el puerto de cassette
-        OUT     (TAPE_PORT), A
-        RET
+    ; Envía el bit/byte reflejándolo en el pin PC0 del Puerto C
+    OUT     (PPI_PORTC), A
+    RET
 
 ; =====================================================================
 ; MENSAJES DE SOPORTE PARA CINTA
